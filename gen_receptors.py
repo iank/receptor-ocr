@@ -17,14 +17,6 @@ def _ilog(x):
 def _h_(x):
     return -1*(x*_ilog(x) + (1-x)*_ilog(1-x))
 
-def _get_centroid(img):
-    m = cv2.moments(img)
-    return (m['m10']/m['m00'], m['m01']/m['m00'])
-
-def _get_diagonal(img):
-    h,w = img.shape
-    return np.sqrt(h**2 + w**2)
-
 def _prior_px(images):
     num_instances = sum([len(images[x]) for x in images.keys()])
 
@@ -86,30 +78,6 @@ def compute_usefulness(images, receptor):
     usefulness = HXY * (1 - HYX)
     return usefulness
 
-def load_images(im_directory, label_filename):
-    images = {}
-    label_file = open(label_filename)
-    for line in label_file:
-        filename, label = line.strip().split(',')
-        label = label if label else ' '
-        img = cv2.imread(os.path.join(im_directory, filename))
-        im2 = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        im2 = cv2.adaptiveThreshold(im2, 1, cv2.ADAPTIVE_THRESH_MEAN_C, \
-            cv2.THRESH_BINARY, 11, 2)
-        im2 = 1 - im2
-
-        desc = {
-            'image': im2,
-            'centroid': _get_centroid(im2),
-            'diag': _get_diagonal(im2),
-        }
-
-        if (label in images):
-            images[label].append(desc)
-        else:
-            images[label] = [desc]
-    return images
-
 def print_frequency_table(images):
     table = [(x, len(images[x])) for x in sorted(images.keys())]
     print("\n".join(["{0}: {1}".format(*x) for x in table]))
@@ -143,7 +111,7 @@ if __name__ == "__main__":
     # Usage: label_seg.py directory/ labels.txt
     # where labels is "filename,label" each line
 
-    images = load_images(sys.argv[1], sys.argv[2])
+    images = rc.load_images(sys.argv[1], sys.argv[2])
     #print_frequency_table(images)
     receptors = gen_receptors(50)
 
@@ -155,8 +123,6 @@ if __name__ == "__main__":
 
     rc.save_field(receptors, usefulness, 'receptor_field.npy')
 
-    # TODO: prune receptor field
-    # TODO: script to load receptor field and display it on arbitrary image
     # TODO: continuous generalization
     # TODO: generate training data for model: load receptor field, compute
     # activations for all images & associate w/ class label
