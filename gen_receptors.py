@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import cv2
+import cv2.cv as cv
 import sys
 import os
 import numpy as np
@@ -8,17 +9,7 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
-def _get_centroid(img):
-    h,w,d = img.shape
-    im2 = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    m = cv2.moments(im2)
-    return (m['m10']/m['m00'], m['m01']/m['m00'])
-
-def _get_diagonal(img):
-    h,w,d = img.shape
-    return np.sqrt(h**2 + w**2)
-
-def _draw_receptor(img, receptor):
+def _receptor_endpoints(img, receptor):
     x0, y0 = _get_centroid(img)
     diag = _get_diagonal(img)
     
@@ -30,9 +21,48 @@ def _draw_receptor(img, receptor):
 
     pt1 = (int(x + np.cos(angle)*length/2), int(y + np.sin(angle)*length/2))
     pt2 = (int(x - np.cos(angle)*length/2), int(y - np.sin(angle)*length/2))
+    return (pt1,pt2)
 
-    cv2.line(img, pt1, pt2, (0, 255, 0), 1)
-    return img
+# Is receptor activated by img?
+def _p_activated(img, receptor):
+    im2 = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    im2 = cv2.adaptiveThreshold(im2, 255, cv2.ADAPTIVE_THRESH_MEAN_C, \
+        cv2.THRESH_BINARY, 11, 2)
+    im2 = 255 - im2
+    pt1,pt2 = _receptor_endpoints(img, receptor)
+    li = cv.InitLineIterator(cv.fromarray(im2), pt1, pt2)
+
+    activation = 0
+    pts = 0
+    for px in li:
+        activation += px
+        pts += 1
+
+    if (pts > 0):
+        return activation/pts
+    else:
+        return activation
+        
+
+def _get_centroid(img):
+    h,w,d = img.shape
+    im2 = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    m = cv2.moments(im2)
+    return (m['m10']/m['m00'], m['m01']/m['m00'])
+
+def _get_diagonal(img):
+    h,w,d = img.shape
+    return np.sqrt(h**2 + w**2)
+
+def _draw_receptors(img, receptors):
+    img_draw = img.copy()
+
+    for receptor in receptors:
+        pt1, pt2 = _receptor_endpoints(img, receptor)
+#        color = (0, (_p_activated(img, receptor) - min(activations)) / (max(activations) - min(activations)) * 255, 0)
+        color = (0, _p_activated(img, receptor), 0)
+        cv2.line(img_draw, pt1, pt2, color, 1)
+    return img_draw
 
 def load_images(im_directory, label_filename):
     images = {}
@@ -80,16 +110,14 @@ def gen_receptors(n):
 
 images = load_images(sys.argv[1], sys.argv[2])
 print_frequency_table(images)
-receptors = gen_receptors(1000)
+receptors = gen_receptors(300)
 
-img = images['1'][0]
-for r in receptors:
-    img = _draw_receptor(img, r)
+img = images['f'][0]
 
-plt.imshow(img, interpolation='bicubic')
+img_draw = _draw_receptors(img, receptors)
+plt.imshow(img_draw, interpolation='bicubic')
 plt.xticks([]), plt.yticks([]) # to hide tick values on X and Y axis
 plt.savefig('/var/www/vara/rec.png', bbox_inches='tight')
-
 
 # TODO: compute receptor activation for all images
 # TODO: compute entropies for receptors
