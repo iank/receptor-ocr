@@ -1,19 +1,10 @@
 #!/usr/bin/env python
 from __future__ import division
 import cv2
-import cv2.cv as cv
 import sys
 import os
 import numpy as np
-
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
-
-def _saveplot(img, filename):
-    plt.imshow(img, interpolation='bicubic')
-    plt.xticks([]), plt.yticks([]) # to hide tick values on X and Y axis
-    plt.savefig('/var/www/vara/{0}.png'.format(filename), bbox_inches='tight')
+import receptor_common as rc
 
 # useful in info theory to let 0log0 = 0
 def _ilog(x):
@@ -26,37 +17,6 @@ def _ilog(x):
 def _h_(x):
     return -1*(x*_ilog(x) + (1-x)*_ilog(1-x))
 
-def _receptor_endpoints(desc, receptor):
-    x0, y0 = desc['centroid']
-    diag = desc['diag']
-    img = desc['image']
-    
-    # compute receptor center
-    x = (receptor['center'][0] - 0.5) * diag + x0
-    y = (receptor['center'][1] - 0.5) * diag + y0
-    length = diag * receptor['length']
-    angle = receptor['angle']
-
-    pt1 = (int(x + np.cos(angle)*length/2), int(y + np.sin(angle)*length/2))
-    pt2 = (int(x - np.cos(angle)*length/2), int(y - np.sin(angle)*length/2))
-    return (pt1,pt2)
-
-# Is receptor activated by img?
-def _p_activated(desc, receptor):
-    pt1,pt2 = _receptor_endpoints(desc, receptor)
-    li = cv.InitLineIterator(cv.fromarray(desc['image']), pt1, pt2)
-
-    activation = 0
-    pts = 0
-    for px in li:
-        activation += px
-        pts += 1
-
-    if (pts > 0):
-        return activation/pts
-    else:
-        return activation
-
 def _get_centroid(img):
     m = cv2.moments(img)
     return (m['m10']/m['m00'], m['m01']/m['m00'])
@@ -64,15 +24,6 @@ def _get_centroid(img):
 def _get_diagonal(img):
     h,w = img.shape
     return np.sqrt(h**2 + w**2)
-
-def _draw_receptors(desc, receptors):
-    img_draw = desc['instance'].copy()
-
-    for receptor in receptors:
-        pt1, pt2 = _receptor_endpoints(desc, receptor)
-        color = _p_activated(desc, receptor)
-        cv2.line(img_draw, pt1, pt2, color, 1)
-    return img_draw
 
 def _prior_px(images):
     num_instances = sum([len(images[x]) for x in images.keys()])
@@ -91,7 +42,7 @@ def _receptor_activation(images, receptor):
         p1_x[letter] = 0
         for instance in images[letter]:
             num_instances += 1
-            if (_p_activated(instance, receptor)):
+            if (rc.p_activated(instance, receptor)):
                 p1_x[letter] += 1
                 py += 1
         p1_x[letter] /= len(images[letter])
@@ -194,7 +145,7 @@ if __name__ == "__main__":
 
     images = load_images(sys.argv[1], sys.argv[2])
     #print_frequency_table(images)
-    receptors = gen_receptors(5000)
+    receptors = gen_receptors(50)
 
     usefulness = [0]*len(receptors)
     for k,receptor in enumerate(receptors):
@@ -202,23 +153,7 @@ if __name__ == "__main__":
         print("Receptor {0} useful {1}".format(k,us))
         usefulness[k] = us
 
-    receptor_field = np.zeros((len(receptors), 5))
-    for k,receptor in enumerate(receptors):
-        receptor_field[k][0] = receptor['center'][0]
-        receptor_field[k][1] = receptor['center'][1]
-        receptor_field[k][2] = receptor['length']
-        receptor_field[k][3] = receptor['angle']
-        receptor_field[k][4] = usefulness[k]
-
-    receptor_field = receptor_field[receptor_field[:,4].argsort()[::-1]]
-    np.save('receptor_field.npy', receptor_field)
-        
-    #img = images['f'][0]
-
-    #img_draw = _draw_receptors(img, receptors)
-    #plt.imshow(img_draw, interpolation='bicubic')
-    #plt.xticks([]), plt.yticks([]) # to hide tick values on X and Y axis
-    #plt.savefig('/var/www/vara/rec.png', bbox_inches='tight')
+    rc.save_field(receptors, usefulness, 'receptor_field.npy')
 
     # TODO: prune receptor field
     # TODO: script to load receptor field and display it on arbitrary image
