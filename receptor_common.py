@@ -38,7 +38,10 @@ def draw_receptors_activated(desc, receptors):
     for receptor in receptors:
         pt1, pt2 = _receptor_endpoints(desc, receptor)
         color = p_activated(desc, receptor)
-        cv2.line(img_draw, pt1, pt2, color, 1)
+        if (color > 0.01):
+            cv2.line(img_draw, pt1, pt2, 4, 1)
+        else:
+            cv2.line(img_draw, pt1, pt2, 2, 1)
     return img_draw
 
 def draw_receptors(desc, receptors):

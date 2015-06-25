@@ -73,9 +73,11 @@ def compute_usefulness(images, receptor):
     HYX = _conditional_entropyYX(p1_x)
     HXY = _conditional_entropyXY(px_1)
 
-    # HXY: How well receptor splits letter space (maximize this)
+    # HXY: How well receptor splits letter space (minimize this)
     # HYX: consistent receptors across variants of symbol minimize this
-    usefulness = HXY * (1 - HYX)
+    C = len(images.keys())
+    max_hxy = -1*_ilog(1/C)
+    usefulness = (max_hxy - HXY) * (1 - HYX)
     return usefulness
 
 def print_frequency_table(images):
@@ -113,7 +115,7 @@ if __name__ == "__main__":
 
     images = rc.load_images(sys.argv[1], sys.argv[2])
     #print_frequency_table(images)
-    receptors = gen_receptors(50)
+    receptors = gen_receptors(5000)
 
     usefulness = [0]*len(receptors)
     for k,receptor in enumerate(receptors):
@@ -121,7 +123,7 @@ if __name__ == "__main__":
         print("Receptor {0} useful {1}".format(k,us))
         usefulness[k] = us
 
-    rc.save_field(receptors, usefulness, 'receptor_field.npy')
+    rc.save_field(receptors, usefulness, 'rf_big.npy')
 
     # TODO: continuous generalization
     # TODO: generate training data for model: load receptor field, compute

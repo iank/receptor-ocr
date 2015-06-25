@@ -10,5 +10,5 @@ receptors = rc.load_field(sys.argv[1])
 desc = rc.load_image(sys.argv[2])
 
 N = int(sys.argv[3])
-img = rc.draw_receptors(desc, receptors[:N])
+img = rc.draw_receptors_activated(desc, receptors[:N])
 rc.save_plot(img, sys.argv[4])
