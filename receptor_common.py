@@ -19,6 +19,87 @@ def _kl_div(p,q):
     eps = 0.0001 # div by zero hack
     return sum(p*np.log((p+eps)/(q+eps)))
 
+def _prior_px(images):
+    num_instances = sum([len(images[x]) for x in images.keys()])
+
+    # Computer p(X=x) prior
+    px = {}
+    for letter in images.keys():
+        px[letter] = len(images[letter]) / num_instances
+    return px
+
+def _receptor_activation(images, receptor):
+    p1_x = {}
+    py = 0
+    num_instances = 0
+    for letter in images.keys():
+        p1_x[letter] = 0
+        for instance in images[letter]:
+            num_instances += 1
+            if (p_activated(instance, receptor)):
+                p1_x[letter] += 1
+                py += 1
+        p1_x[letter] /= len(images[letter])
+    py /= num_instances
+    return (p1_x, py)
+
+def _h_(x):
+    return -1*(x*_ilog(x) + (1-x)*_ilog(1-x))
+
+def _ilog(x):
+    if (x==0):
+        return 0
+    return np.log2(x)
+
+# Find H(Y|X) = average of H(Y|X=x) = h(p(Y=1|X=x))
+def _conditional_entropyYX(p1_x):
+    HYX = 0
+    for letter in p1_x.keys():
+        HYX += _h_(p1_x[letter])
+    HYX /= len(p1_x.keys())
+    return HYX
+
+# Find H(X|Y=1) = -1*sum_x(p(X=x|Y=1))
+def _conditional_entropyXY(px_1):
+    HXY = 0
+    for letter in px_1.keys():
+        HXY += px_1[letter]*_ilog(px_1[letter])
+    HXY *= -1
+    return HXY
+
+def compute_activation(images, receptor):
+    px = _prior_px(images)
+    p1_x, py = _receptor_activation(images, receptor)
+
+    if (py == 0):
+        return 0 # receptor is not useful if it is -never- on. HYX high, HXY 0
+
+    # Find p(X=x|Y=1) = p(Y=1|X=x) * p(X=x) / P(Y=y)  -- (Bayes)
+    px_1 = {}
+    for letter in images.keys():
+        px_1[letter] = p1_x[letter] * px[letter] / py
+
+    # Find H(Y|X) = average of H(Y|X=x) = h(p(Y=1|X=x))
+    HYX = _conditional_entropyYX(p1_x)
+    HXY = _conditional_entropyXY(px_1)
+
+    # HXY: How well receptor splits letter space (minimize this)
+    # HYX: consistent receptors across variants of symbol minimize this
+    receptor['HYX'] = HYX
+    receptor['HXY'] = HXY
+    receptor['px_1'] = px_1
+    receptor['p1_x'] = p1_x
+
+    C = len(receptor['px_1'].keys())
+    max_hxy = -1*_ilog(1/C)
+
+    # Maximize divergence from existing set, minimize uncertainty per-pattern
+    # and across patterns
+    usefulness = (max_hxy - receptor['HXY']) * (1 - receptor['HYX'])
+    receptor['usefulness'] = usefulness
+
+    return receptor
+
 def _get_centroid(img):
     m = cv2.moments(img)
     return (m['m10']/m['m00'], m['m01']/m['m00'])
