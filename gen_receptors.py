@@ -5,6 +5,7 @@ import sys
 import os
 import numpy as np
 import receptor_common as rc
+import time
 
 # useful in info theory to let 0log0 = 0
 def _ilog(x):
@@ -57,7 +58,7 @@ def _conditional_entropyXY(px_1):
     HXY *= -1
     return HXY
 
-def compute_usefulness(images, receptor):
+def compute_activation(images, receptor):
     px = _prior_px(images)
     p1_x, py = _receptor_activation(images, receptor)
 
@@ -75,10 +76,36 @@ def compute_usefulness(images, receptor):
 
     # HXY: How well receptor splits letter space (minimize this)
     # HYX: consistent receptors across variants of symbol minimize this
-    C = len(images.keys())
+    receptor['HYX'] = HYX
+    receptor['HXY'] = HXY
+    receptor['px_1'] = px_1
+
+    C = len(receptor['px_1'].keys())
     max_hxy = -1*_ilog(1/C)
-    usefulness = (max_hxy - HXY) * (1 - HYX)
-    return usefulness
+
+    # Maximize divergence from existing set, minimize uncertainty per-pattern
+    # and across patterns
+    usefulness = (max_hxy - receptor['HXY']) * (1 - receptor['HYX'])
+    receptor['usefulness'] = usefulness
+
+    return receptor
+
+def compute_usefulness(incl, rec, num):
+    if 'diiv' not in rec:
+        rec['diiv'] = 1
+
+    p = np.array([rec['px_1'][k] for k in sorted(rec['px_1'])])
+    q = np.array([incl['px_1'][k] for k in sorted(incl['px_1'])])
+    rec['diiv'] += rc.sym_kl_div(p,q)
+
+    C = len(rec['px_1'].keys())
+    max_hxy = -1*_ilog(1/C)
+
+    # Maximize divergence from existing set, minimize uncertainty per-pattern
+    # and across patterns
+    usefulness = rec['diiv']/num * (max_hxy - rec['HXY']) * (1 - rec['HYX'])
+    rec['usefulness'] = usefulness
+    return rec
 
 def print_frequency_table(images):
     table = [(x, len(images[x])) for x in sorted(images.keys())]
@@ -117,14 +144,27 @@ if __name__ == "__main__":
     #print_frequency_table(images)
     receptors = gen_receptors(5000)
 
-    usefulness = [0]*len(receptors)
     for k,receptor in enumerate(receptors):
-        us = compute_usefulness(images, receptor)
-        print("Receptor {0} useful {1}".format(k,us))
-        usefulness[k] = us
+        print("Computing activation for {0}".format(k))
+        receptors[k] = compute_activation(images, receptor)
 
-    rc.save_field(receptors, usefulness, 'rf_big.npy')
+    # Discard receptors that are never activated by training set
+    receptors = [x for x in receptors if x != 0]
+
+    S = []
+    remaining = receptors
+    remaining = sorted(remaining, key=lambda k: k['usefulness'])
+    S.append(remaining.pop())
+    while remaining:
+        for k,receptor in enumerate(remaining):
+            remaining[k] = compute_usefulness(S[-1], receptor, len(S))
+
+        # pick most useful receptor, add to S
+        remaining = sorted(remaining, key=lambda k: k['usefulness'])
+        S.append(remaining.pop())
+        print("S: {0} ({1})".format(len(S), time.time()))
+
+    rc.save_field(S, 'receptor_field.npy')
 
     # TODO: continuous generalization
-    # TODO: generate training data for model: load receptor field, compute
-    # activations for all images & associate w/ class label
+    # TODO: train NN, backpropagate receptor activations for each letter

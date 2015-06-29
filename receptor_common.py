@@ -10,6 +10,15 @@ from matplotlib import pyplot as plt
 
 import numpy as np
 
+# Symmetric Kullback Leibler divergence between PDFs p and q, defined as
+# D_{KL}(P||Q) + D_{KL}(Q||P)
+def sym_kl_div(p, q):
+    return _kl_div(p,q) + _kl_div(q,p)
+
+def _kl_div(p,q):
+    eps = 0.0001 # div by zero hack
+    return sum(p*np.log((p+eps)/(q+eps)))
+
 def _get_centroid(img):
     m = cv2.moments(img)
     return (m['m10']/m['m00'], m['m01']/m['m00'])
@@ -104,16 +113,14 @@ def p_activated(desc, receptor):
     else:
         return activation
 
-def save_field(receptors, usefulness, filename):
-    receptor_field = np.zeros((len(receptors), 5))
+def save_field(receptors, filename):
+    receptor_field = np.zeros((len(receptors), 4))
     for k,receptor in enumerate(receptors):
         receptor_field[k][0] = receptor['center'][0]
         receptor_field[k][1] = receptor['center'][1]
         receptor_field[k][2] = receptor['length']
         receptor_field[k][3] = receptor['angle']
-        receptor_field[k][4] = usefulness[k]
 
-    receptor_field = receptor_field[receptor_field[:,4].argsort()[::-1]]
     np.save(filename, receptor_field)
 
 def load_field(filename):
@@ -124,7 +131,6 @@ def load_field(filename):
             'center': (receptor_field[k,0], receptor_field[k,1]),
             'length': receptor_field[k,2],
             'angle': receptor_field[k,3],
-            'usefulness': receptor_field[k,4]
         }
         receptors.append(receptor)
         
