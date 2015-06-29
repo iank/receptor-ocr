@@ -134,13 +134,14 @@ def draw_receptors_activated(desc, receptors):
             cv2.line(img_draw, pt1, pt2, 2, 1)
     return img_draw
 
-def draw_receptors(desc, receptors):
+def draw_receptors(desc, receptors, annotations):
     img_draw = desc['image'].copy()
 
-    for receptor in receptors:
+    for k,receptor in enumerate(receptors):
         pt1, pt2 = _receptor_endpoints(desc, receptor)
-        color = receptor['usefulness']
+        color = 1
         cv2.line(img_draw, pt1, pt2, color, 1)
+        cv2.putText(img_draw, annotations[k], pt2, cv2.FONT_HERSHEY_PLAIN, 1, color+1)
     return img_draw
 
 
